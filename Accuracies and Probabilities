@@ -1,0 +1,323 @@
+# Install Libraries
+install.packages("ggplot2")
+install.packages("dplyr")
+install.packages("tidyr")
+install.packages("stringr")
+install.packages("scales")
+install.packages("broom")
+install.packages("ggrepel")
+install.packages("gridExtra")
+install.packages("patchwork")
+# Load Libraries
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(scales)
+library(broom)
+library(ggrepel)
+library(gridExtra)
+library(patchwork)
+setwd("//anufiles.anu.edu.au/anu/RSB/Home/u8441065/My Documents")
+classaccuracy<-read.csv("AlphaEarth Paper/accuracies.csv",header=TRUE)
+classaccuracy <- classaccuracy %>%
+  filter(!is.na(accuracypercent)) #Filter NAs
+############################ Per Class Accuracy ################################
+# Order by mean accuracy
+classaccuracy <- classaccuracy %>%
+  filter(!is.na(efg)) %>%
+  mutate(accuracypercent = as.numeric(accuracypercent)) %>%
+  group_by(efg) %>%
+  mutate(mean_acc = mean(accuracypercent, na.rm = TRUE)) %>%
+  ungroup() %>%
+  mutate(efg = reorder(efg, -mean_acc))
+#Compute average accuracy per efg
+avg_accuracy <- classaccuracy %>%
+  group_by(efg) %>%
+  summarise(avg_acc = mean(accuracypercent, na.rm = TRUE))
+label_positions <- classaccuracy %>%
+  group_by(efg) %>%
+  summarise(nopoints_label = max(nopoints, na.rm = TRUE), .groups = 'drop')
+ggplot(classaccuracy, aes(x=efg, y=accuracypercent, fill=model))+
+  geom_col(position="dodge",width=0.7,colour='black')+
+#  geom_text(
+#    data = label_positions,
+#    aes(x = efg, y = max(classaccuracy$accuracypercent, na.rm = TRUE) * 1.05, # same height for all
+#        label = paste0("n = ", round(nopoints_label))),
+#    size = 3.2,
+#    fontface = "bold",
+#    inherit.aes = FALSE
+#  ) +
+  geom_segment(
+    data = avg_accuracy,
+    aes(
+      x = as.numeric(factor(efg)) - 0.35, # start of the line
+      xend = as.numeric(factor(efg)) + 0.35, # end of the line
+      y = avg_acc,
+      yend = avg_acc
+    ),
+    color = "black",
+    linewidth = 0.7,
+    inherit.aes=FALSE
+  )+
+  scale_fill_manual(
+    values=c("sentinel"="#E97132","alphaearth"="#156082"),
+    name="Predictor Layers:",
+    labels=label_wrap_gen(width=15)(
+      c("sentinel"="Sentinel-2 Imagery","alphaearth"="AlphaEarth Embeddings")
+    )
+  )+
+  scale_x_discrete(
+    labels = function(x) str_wrap(
+      c(
+        "F_2_2" = "F2.2 Small Permanent Freshwater Lakes",
+        "T_7_4" = "T7.4 Urban and Industrial Ecosystems",
+        "M_2_1" = "M2.1 Epipelagic Ocean Water (Deep Water)",
+        "M_1_3" = "M1.3 Photic Coral Reefs",
+        "MFT_1_2" = "MFT1.2 Intertidal Forests and Shrublands",
+        "M_1_7" = "M1.7 Subtidal Sand Beds",
+        "TF_1_3" = "TF1.3 Permanent Marshes",
+        "MT_2_1" = "MT2.1 Coastal Shrublands and Grasslands",
+        "T_7_1" = "T7.1 Annual Croplands",
+        "M_1_1" = "M1.1 Seagrass Meadows",
+        "MT_1_3" = "MT1.3 Sandy Shorelines",
+        "MT_1_1" = "MT1.1 Rocky Shorelines",
+        "MT_3_1" = "MT3.1 Artificial Shorelines",
+        "T_7_3" = "T7.3 Plantations",
+        "FM_1_3" = "FM1.3 Intermittently Open and Closed Lakes and Lagoons"
+      )[x],
+      width = 30
+    )
+  ) +
+  scale_y_continuous(expand=expansion(mult=c(0,0.05)))+
+labs(
+  x="Ecosystem",
+  y="Accuracy (%)"
+)+
+  theme_bw()+
+  theme(
+    panel.grid.major=element_blank(),
+    panel.grid.minor=element_blank(),
+    axis.text.x=element_text(angle=90,hjust=1.0,vjust=0.3,size=8,face="bold"),
+    axis.text.y=element_text(size=8,face="bold"),
+    axis.title.x=element_text(size=10,face="bold"),
+    axis.title.y=element_text(size=10,face="bold"),
+    legend.position=c(0.95,0.95),
+    legend.justification=c("right","top"),
+    legend.text=element_text(size=9),
+    legend.title=element_text(size=11,face="bold")
+  )
+
+########################## Probability vs Accuracy #############################
+prob_sentinel<-read.csv("AlphaEarth Paper/probabilities/Class_Probabilities_Sentinel3.csv",header=TRUE)
+prob_sentinel<-prob_sentinel %>%
+  mutate(source="Sentinel") #Add a source column
+prob_google<-read.csv("AlphaEarth Paper/probabilities/Class_Probabilities_Google2.csv",header=TRUE)
+prob_google<-prob_google %>%
+  mutate(source="Google")
+head(prob_sentinel)
+head(prob_google)
+# Combine the Data
+prob_combined<-bind_rows(prob_sentinel,prob_google)
+# Prepare Data
+prob_combined$class_number<-as.factor(prob_combined$class_number)
+prob_combined$source<-as.factor(prob_combined$source)
+head(prob_combined)
+# Calculate average of max_probability for every class_number
+average_probabilities<-prob_combined%>%
+  group_by(class_number,source)%>%
+  summarise(
+    average_max_probability=mean(max_probability,na.rm=TRUE),
+    .groups='drop'
+  )
+print(average_probabilities)
+# Rename class values
+class_mapping_vector <- c(
+  '0' = 'MT_2_1',
+  '1' = 'T_7_3',
+  '2' = 'T_7_4',
+  '3' = 'M_1_1',
+  '4' = 'FM_1_3',
+  '5' = 'F_2_2',
+  '6' = 'MFT_1_2',
+  '7' = 'MT_1_1',
+  '8' = 'MT_1_3',
+  '9' = 'MT_3_1',
+  '10' = 'M_1_3',
+  '11' = 'M_1_7',
+  '12' = 'M_2_1',
+  '13' = 'TF_1_3',
+  '14' = 'T_7_1'
+)
+average_probabilities<-average_probabilities %>%
+  mutate(
+    class_number=recode(as.character(class_number), !!!class_mapping_vector)
+  )
+print(average_probabilities,n=28)
+# Combine dataframes
+classaccuracy <- classaccuracy %>%
+  mutate(model=recode(model,
+                      "alphaearth" = "GOOGLE",
+                      "sentinel" = "SENTINEL"))
+accuracy_to_combine <- classaccuracy %>%
+  complete(efg, model, fill = list(value=0))
+accuracy_to_combine_clean<-accuracy_to_combine%>%
+  mutate(
+    model = toupper(model)
+  )
+print(accuracy_to_combine,n=30)
+average_probabilities_clean <- average_probabilities %>%
+  mutate(source = toupper(source))
+combined_data<-average_probabilities_clean %>%
+  left_join(
+    accuracy_to_combine_clean,
+    by=c("class_number"="efg","source"="model")
+  )
+head(combined_data)
+combined_data$accuracypercent <- as.numeric(combined_data$accuracypercent)
+par(mfrow=c(1,3))
+# Plot Probability against Accuracy
+paga<-ggplot(data=combined_data,aes(
+  x=accuracypercent,
+  y=average_max_probability,
+  color=source
+))+
+  geom_text(
+    aes(label=class_number),
+    nudge_x=0.022,
+    nudge_y=0.018,
+    size=3.5,
+    check_overlap = TRUE
+  )+
+  scale_color_manual(
+    values=c("GOOGLE"="#156082","SENTINEL"="#E97132"),
+    name="Predictor Layers:",
+    labels=label_wrap_gen(width=15)
+    (c("GOOGLE"="AlphaEarth Embeddings","SENTINEL"="Sentinel-2 Imagery"))
+  )+
+  geom_point(size=2,alpha=0.7)+
+  # geom_smooth(method="loess",se=FALSE, span=1)+
+  geom_smooth(method="lm",se=FALSE,linewidth=0.8)+
+xlim(0,100)+
+  labs(
+    x="Accuracy",
+    y="Confidence"
+  )+
+  theme_bw()+
+  theme(
+    panel.grid.major=element_blank(),
+    panel.grid.minor=element_blank(),
+    axis.text.x=element_text(angle=0,hjust=0.5,vjust=0.3,size=10,face="bold"),
+    axis.text.y=element_text(size=10,face="bold"),
+    axis.title.x=element_text(size=12,face="bold"),
+    axis.title.y=element_text(size=12,face="bold"),
+    legend.title=element_text(size=12,face="bold"),
+    legend.text=element_text(size=10)
+  )
+# Plot Probability against Number of Training Points
+pagtp<-ggplot(data=combined_data,aes(
+  x=notrainpoints,
+  y=average_max_probability,
+  color=source
+))+
+  geom_text(
+    aes(label=class_number),
+    nudge_x=0.022,
+nudge_y=0.018,
+size=3.5,
+check_overlap = TRUE
+)+
+  scale_color_manual(
+    values=c("GOOGLE"="#156082","SENTINEL"="#E97132"),
+    name="Covariates:",
+    # labels=label_wrap_gen(width=15)
+    # (c("GOOGLE"="AlphaEarth Embeddings","SENTINEL"="Sentinel-2 Imagery")),
+    guide="none"
+  )+
+  geom_point(size=2,alpha=0.7)+
+  # geom_smooth(method="loess",se=FALSE, span=1)+
+  geom_smooth(method="lm",se=FALSE,linewidth=0.8)+
+  labs(
+    x="Number of Training Points",
+    y="Confidence"
+  )+
+  theme_bw()+
+  theme(
+    panel.grid.major=element_blank(),
+    panel.grid.minor=element_blank(),
+    axis.text.x=element_text(angle=0,hjust=0.5,vjust=0.3,size=10,face="bold"),
+    axis.text.y=element_text(size=10,face="bold"),
+    axis.title.x=element_text(size=12,face="bold"),
+    axis.title.y=element_text(size=12,face="bold"),
+    legend.title=element_text(size=12,face="bold"),
+    legend.text=element_text(size=10)
+)
+# Plot Accuracy against Number of Training Points
+aagtp<-ggplot(data=combined_data,aes(
+  x=notrainpoints,
+  y=accuracypercent,
+  color=source
+))+
+  geom_text(
+    aes(label = class_number),
+    nudge_x = 0.022,
+    nudge_y = 3.5,
+    size = 3.5,
+    check_overlap = TRUE
+  )+
+  scale_color_manual(
+    values=c("GOOGLE"="#156082","SENTINEL"="#E97132"),
+    name="Covariates:",
+    # labels=label_wrap_gen(width=15)
+    # (c("GOOGLE"="AlphaEarth Embeddings","SENTINEL"="Sentinel-2 Imagery")),
+    guide="none"
+  )+
+  geom_point(size=2,alpha=0.7)+
+# geom_smooth(method="loess",se=FALSE, span=1)+
+geom_smooth(method="lm",se=FALSE,linewidth=0.8)+
+  labs(
+    x="Number of Training Points",
+    y="Accuracy (%)"
+  )+
+  theme_bw()+
+  theme(
+    panel.grid.major=element_blank(),
+    panel.grid.minor=element_blank(),
+    axis.text.x=element_text(angle=0,hjust=0.5,vjust=0.3,size=10,face="bold"),
+    axis.text.y=element_text(size=10,face="bold"),
+    axis.title.x=element_text(size=12,face="bold"),
+    axis.title.y=element_text(size=12,face="bold"),
+    legend.title=element_text(size=12,face="bold"),
+    legend.text=element_text(size=10)
+  )
+# following line from: https://www.sthda.com/english/articles/24-ggpubr-publication-readyplots/81-ggplot2-easy-way-to-mix-multiple-graphs-on-the-same-page/
+grid.arrange(paga,pagtp,aagtp)
+(paga / pagtp / aagtp) + 
+  plot_layout(guides = "collect") + 
+  plot_annotation(tag_levels = 'a', tag_suffix = ")") & 
+  theme(legend.position = "top")
+# R squared Correlation
+# Probability against Accuracy
+r2_paga <- combined_data %>%
+  group_by(source) %>%
+  do(model = lm(average_max_probability ~ accuracypercent, data = .)) %>%
+mutate(R_squared = summary(model)$r.squared) %>%
+  select(source, R_squared)
+print("R-squared: Probability vs. Accuracy")
+print(r2_paga)
+# Probability against Number of Training Points
+r2_pagtp <- combined_data %>%
+  group_by(source) %>%
+  do(model = lm(average_max_probability ~ notrainpoints, data = .)) %>%
+  mutate(R_squared = summary(model)$r.squared) %>%
+  select(source, R_squared)
+print("R-squared: Probability vs. Training Points")
+print(r2_pagtp)
+# Accuracy against Number of Training Points
+r2_aagtp <- combined_data %>%
+  group_by(source) %>%
+  do(model = lm(accuracypercent ~ notrainpoints, data = .)) %>%
+  mutate(R_squared = summary(model)$r.squared) %>%
+  select(source, R_squared)
+print("R-squared: Accuracy vs. Training Points")
+print(r2_aagtp)
