@@ -1,0 +1,32 @@
+library(ggplot2) 
+class<-read.csv("classreduction2.csv",header=TRUE)
+head(class) 
+class$noclasses<-as.character(class$noclasses) 
+class$noclasses <- factor(class$noclasses,  
+                          levels = c('2', '4', '6', '8', '11', '15')) 
+ggplot(class, aes(x=noclasses, y=accuracy*100, fill=covariate))+ 
+  geom_col(position="dodge",width=0.7,colour='black')+ 
+  scale_y_continuous(expand=expansion(mult=c(0,0.05)))+ 
+    labs( 
+      x="Number of Classes", 
+      y="Overall Accuracy / %" 
+  )+ 
+  scale_x_discrete(labels=c("Two","Four","Six","Eight","Eleven","Fifteen"))+ 
+  scale_fill_manual( 
+    values=c("sentinel"="#E97132","gfm"="#156082"), 
+    name="Covariates:", 
+    labels=label_wrap_gen(width=15)( 
+      c("sentinel"="Sentinel-2 Imagery","gfm"="AlphaEarth Embeddings") 
+    ) 
+  )+ 
+  theme_bw()+ 
+  theme( 
+    panel.grid.major=element_blank(), 
+    panel.grid.minor=element_blank(), 
+    axis.text.x=element_text(angle=0,hjust=0.5,vjust=1,size=12,face="bold"), 
+    axis.text.y=element_text(size=12,face="bold"),
+    axis.title.x=element_text(size=16,face="bold"), 
+    axis.title.y=element_text(size=16,face="bold"), 
+    legend.text=element_text(size=12), 
+    legend.title=element_text(size=16,face="bold") 
+)
