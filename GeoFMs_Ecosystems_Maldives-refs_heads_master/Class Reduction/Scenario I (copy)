@@ -1,0 +1,327 @@
+/**** Start of imports. If edited, may not auto-convert in the playground. ****/
+var samples = ee.FeatureCollection("projects/ee-georgelucas217/assets/alteredSamples2"),
+    validation = ee.FeatureCollection("projects/ee-georgelucas217/assets/validationGeorge"),
+    sites = ee.FeatureCollection("projects/ee-georgelucas217/assets/MaldivesStudySites");
+/***** End of imports. If edited, may not auto-convert in the playground. *****/
+///////// ---------------------------------------- CLASS REDUCTION -----------------------------------------------
+///////// -------------------------------------------------------------------------------------------------------- /////////
+ 
+///////// ---------------------------------------- Load Embeddings -----------------------------------------------
+
+//// ---------- Site map ---------- 
+var sites = sites.map(function(f){return f.buffer(10);}); //Loads study site polygons with 10m buffer as was done when points were created
+
+//// ---------- Sentinel-2 Imagery ---------- 
+var S2 = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED');             //Import from code for foolproofing
+
+function maskS2clouds(image){
+  var qa = image.select('QA60')                                         //Mask clouds function using S2 QA band
+  var cloudBitMask = 1<<10;                                             //Clouds are bit 10
+  var cirrusBitMask = 1<<11;                                            //Cirrus are bit 11
+  var mask = qa.bitwiseAnd(cloudBitMask).eq(0)
+    .and(qa.bitwiseAnd(cirrusBitMask).eq(0));                           //set both flats to zero indicating clear conditions.
+  return image.updateMask(mask)
+    .select("B.*")
+    .divide(10000)
+    .copyProperties(image,["system:time_start"]);                       //Return masked and scaled data without QA bands.
+}
+
+var imageryS2 = sites.map(function(f){
+  var geom = f.geometry();                                              //Get the shape of the island.
+  var image = S2                                                        //Access Sentinel-2 database.
+  .filterDate("2023-01-01", "2025-05-15")                               //Decide which dates to search through.
+  .filterBounds(geom)                                                   //Find an image that intersects the island.
+  .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 20))                  //Sort images by cloudiness.
+  .sort('CLOUDY_PIXEL_PERCENTAGE')
+  .map(maskS2clouds)
+  .limit(2)                                                             //Limit to the top 2 most cloud free images (for mosaicing in next line).
+  .mosaic();                                                            //Account for images intersecting sentinel tile edge.
+  return ee.Image(image).clip(geom)                                     //Return the image and clip it by the shape of the island.
+  .set('Island_ID', f.get('name'));                                     //Tag images with island names.
+});
+
+var clippedImageCollection = ee.ImageCollection(imageryS2);
+
+var mosaicImage = clippedImageCollection.mosaic()                         // Combine images into a mosaic
+
+var ndvi = mosaicImage.normalizedDifference(['B8','B4']).rename('NDVI');
+var ndwi = mosaicImage.normalizedDifference(['B3','B8']).rename('NDWI');
+mosaicImage = mosaicImage.addBands(ndvi).addBands(ndwi);
+
+var trueColour = {bands: ["B4","B3","B2"], min: 0, max: 0.3, gamma: 1.5};                     //Set true colour for loading into map
+var sentinelBands = ['B2','B3','B4','B5','B6','B7','B8','B8A','B11','B12','NDVI','NDWI'];                   //Extract Bands
+
+
+//// ---------- Google Satellite Embeddings V1 ---------- 
+var embeddingsG = ee.ImageCollection('GOOGLE/SATELLITE_EMBEDDING/V1/ANNUAL');                 //Import from code for foolproofing
+
+var embeddingsG = sites.map(function(f){                                                      //Load embeddings to study site geometries
+  var geomG = f.geometry();
+  var imageG = embeddingsG
+      .filterDate("2023-01-01", "2025-06-25")
+      .filterBounds(geomG)
+      .first();
+    return ee.Image(imageG).clip(geomG).set('Island_ID', f.get('name'));
+});
+
+var clippedImageCollectionG = ee.ImageCollection(embeddingsG);
+var mosaicImageG = clippedImageCollectionG.mosaic();                                          //Combine images into a mosaic to reduce computational load.
+var googleBands = ['A00','A01', 'A02', 'A03','A04', 'A05', 'A06','A07', 'A08', 'A09','A10',   //Extract Bands
+                  'A11', 'A12', 'A13','A14', 'A15', 'A16','A17', 'A18', 'A19','A20',
+                  'A21', 'A22', 'A23','A24', 'A25', 'A26','A27', 'A28', 'A29','A30',
+                  'A31', 'A32', 'A33','A34', 'A35', 'A36','A37', 'A38', 'A39','A40',
+                  'A41', 'A42', 'A43','A44', 'A45', 'A46','A47', 'A48', 'A49','A50',
+                  'A51', 'A52', 'A53','A54', 'A55', 'A56','A57', 'A58', 'A59','A60',
+                  'A61', 'A62', 'A63'];
+
+///////// ----------------------------------- Load and Format Points ------------------------------------------
+
+//// Load Annotated Sample Points from Assets (updatable asset from Earth System Studio)
+// var samples = ee.FeatureCollection("projects/geo-global-ecosystems-atlas/assets/2_GEL_datasets/Training_data/Mapping_regions/1_Maldives/maldives_george_training_data");
+
+//// Filter Training pPints
+var filteredTrainingPoints = samples.filter(ee.Filter.inList('code_10m',[
+  'MT_2_1','T_7_3','T_7_4','M_1_1','FM_1_3','F_2_2','MFT_1_2','MT_1_1','MT_1_3','MT_3_1','M_1_3','M_1_7','M_2_1','TF_1_3','T_7_1']))
+  .filter(ee.Filter.gte('confidence',4))      //Include only values with confidence 4 or 5
+  .filter(ee.Filter.gte('hom_10m',60));       //Include only values with homogeneity over 90%
+  
+//// Filter Validation Points
+var filteredValidationPoints = validation.filter(ee.Filter.notNull(['efg_10m']))
+                                         .filter(ee.Filter.inList('efg_10m',[
+   'MT_2_1','T_7_3','T_7_4','M_1_1','FM_1_3','F_2_2','MFT_1_2','MT_1_1','MT_1_3','MT_3_1','M_1_3','M_1_7','M_2_1','TF_1_3','T_7_1']))
+   .filter(ee.Filter.gte('int_conf',3));      //Include only values with confidence of 3 or greater.
+
+///////// --------------------------------------------------------------------------------------------------------------------------- /////////
+///////// ------------------------------------------------------- Scenario I -------------------------------------------------------- /////////
+///////// --------------------------------------------------------------------------------------------------------------------------- /////////
+
+//// Convert Classes To Numbers
+var trainingPoints = filteredTrainingPoints.map(function(f) {
+  var label = f.get('code_10m');                          //take labels from 'code_10m' column
+  var classNumber = ee.Dictionary({'TF_1_3': 0,           //Give each label a number
+                                  'MFT_1_2': 0,
+                                  'MT_2_1': 0,
+                                  'T_7_1': 0,
+                                  'T_7_3': 0,
+                                  'T_7_4': 0,
+                                  'MT_3_1': 0,
+                                  'MT_1_1': 0,
+                                  'MT_1_3': 0,
+                                  'F_2_2': 1,
+                                  'FM_1_3': 1,
+                                  'M_1_7': 1,
+                                  'M_1_1': 1,
+                                  'M_1_3': 1,
+                                  'M_2_1': 1,}).get(label);
+  return f.set('class_num', classNumber)                  //Put the numbers in a new column, named 'class_num'
+});
+
+var validationPoints = filteredValidationPoints.map(function(f) {
+  var label = f.get('efg_10m');                          //take labels from 'code_10m' column
+  var classNumber = ee.Dictionary({'TF_1_3': 0,           //Give each label a number
+                                  'MFT_1_2': 0,
+                                  'MT_2_1': 0,
+                                  'T_7_1': 0,
+                                  'T_7_3': 0,
+                                  'T_7_4': 0,
+                                  'MT_3_1': 0,
+                                  'MT_1_1': 0,
+                                  'MT_1_3': 0,
+                                  'F_2_2': 1,
+                                  'FM_1_3': 1,
+                                  'M_1_7': 1,
+                                  'M_1_1': 1,
+                                  'M_1_3': 1,
+                                  'M_2_1': 1,}).get(label);
+  return f.set('class_num', classNumber)                  //Put the numbers in a new column, named 'class_num'
+});
+
+//// Create a pallete from the efg_colours column
+var palette          = ['#32EA62',  //TF_1_3 / MFT_1_2 / MT_2_1 / T_7_3 / T_7_1 / T_7_4 / MT_3_1 / MT_1_1 / MT_1_3
+                        '#2E94D2',  //F_2_2 / FM_1_3 / M_1_7 / M_1_1 / M_1_3 / M_2_1
+                        ]; 
+
+var leftTitle = ui.Label({
+  value: "Sentinel-2 Classification Scenario I",
+  style: {fontWeight: "bold", fontSize: "16px", margin: "10px 5px"}
+});
+var rightTitle = ui.Label({
+  value: "Google Embeddings Classification Scenario I",
+  style: {fontWeight: "bold", fontSize: "16px", margin: "10px 5px"}       //For the map display. This will be relevant later in the code
+});
+
+///////// --------------------------------------------------------------------------------------------------------------------------- /////////
+///////// --------------------------------------------------------------------------------------------------------------------------- /////////
+///////// --------------------------------------------------------------------------------------------------------------------------- /////////
+
+//// Run Classifiers
+// Sentinel-2
+var training = mosaicImage.select(sentinelBands).sampleRegions({
+  collection: trainingPoints,
+  properties: ['class_num'],
+  scale: 10
+});
+
+var classifier = ee.Classifier.smileRandomForest(500).train({             //Random Forest Classifier (Switch as needed with 'ctrl /')
+  features: training,
+  classProperty: 'class_num',
+  inputProperties: sentinelBands                                          //Train the classifier
+});
+
+var classified = mosaicImage.select(sentinelBands).classify(classifier);      //Run the classifier
+
+var classified = classified.focal_mode({
+  radius: 10,
+  kernelType: 'square',
+  units: 'meters',
+  iterations: 1
+});
+
+// Google Satellite Embeddings V1
+var trainingG = mosaicImageG.select(googleBands).sampleRegions({
+  collection: trainingPoints,
+  properties: ['class_num'],
+  scale: 10
+});
+
+var classifierG = ee.Classifier.smileRandomForest(500).train({            //Random Forest Classifier (Switch as needed with 'ctrl /')
+  features: trainingG,
+  classProperty: 'class_num',
+  inputProperties: googleBands                                              //Train the classifier
+});
+
+var classifiedG = mosaicImageG.select(googleBands).classify(classifierG);
+
+//// Accuracy Assessment
+// Sentinel-2
+var validation = classified.sampleRegions({
+  collection: validationPoints,
+  properties: ['class_num'],
+  scale: 10
+});
+print(validation)
+
+var confMatrix = validation.errorMatrix("class_num","classification");
+var OA = confMatrix.accuracy();
+var CA = confMatrix.consumersAccuracy();
+var Kappa = confMatrix.kappa();
+var PA = confMatrix.producersAccuracy();
+
+print('Confusion Matrix', confMatrix);
+print('Overall Accuracy', OA);
+print('Consumers Accuracy', CA);
+print('Kappa', Kappa);
+print('Producers Accuracy', PA);
+
+//// 4.2. Google Embeddings
+var validationG = classifiedG.sampleRegions({
+  collection: validationPoints,
+  properties: ['class_num'],
+  scale: 10,
+});
+print(validationG);
+
+var confMatrixG = validationG.errorMatrix("class_num","classification");
+var OAG = confMatrixG.accuracy();
+var CAG = confMatrixG.consumersAccuracy();
+var KappaG = confMatrixG.kappa();
+var PAG = confMatrixG.producersAccuracy();
+
+print('Confusion Matrix Google', confMatrixG);
+print('Overall Accuracy Google', OAG);
+print('Consumers Accuracy Google', CAG);
+print('Kappa Google', KappaG);
+print('Producers Accuracy Google', PAG);
+
+//// Display the Map 
+// Create Split Panel map for side by side comparison of models.
+//Create two Separate Maps (for side by side viewing)
+var leftMap = ui.Map();
+var rightMap = ui.Map();
+
+//Centre Maps on the Maldives
+leftMap.centerObject(sites, 6.5);
+rightMap.centerObject(sites, 6.5);
+
+//Set maps to load in satellite view
+leftMap.setOptions('SATELLITE');
+rightMap.setOptions('SATELLITE');
+
+///////// ---------- Scenario I ---------- /////////
+//Display imagery and classifications on Separate Maps
+leftMap.addLayer(mosaicImage, trueColour, "Sentinel Imagery");
+leftMap.addLayer(classified, {min: 0, max: 1, palette: 
+                                                    palette},  
+                                                    "Classification with Sentinel Embeddings");
+rightMap.addLayer(mosaicImage, trueColour, "Sentinel Imagery");
+rightMap.addLayer(classifiedG, {min: 0, max: 1, palette:  
+                                                    palette},  
+                                                    "Classification with Google Embeddings");
+
+//Link the maps so they pan and zoom together
+var linker = ui.Map.Linker([leftMap, rightMap]);
+
+//Wrap each map with a vertical panel
+var leftPanel = ui.Panel({
+  widgets: [leftTitle, leftMap],
+  layout: ui.Panel.Layout.flow('vertical')
+});
+var rightPanel = ui.Panel({
+  widgets: [rightTitle, rightMap],
+  layout: ui.Panel.Layout.flow('vertical')
+});
+
+
+//Create a split panel for the maps
+var splitPanel = ui.SplitPanel({
+  firstPanel: leftPanel,
+  secondPanel: rightPanel,
+  orientation: 'horizontal',
+  wipe: false
+})
+
+//Set split panel to root UI (Show the split panel where the big map usually is)
+ui.root.clear();
+ui.root.add(splitPanel);
+
+////Add stats labels
+//Create panel scaffolds
+var leftStatsPanel = ui.Panel({
+  style: {
+    position: 'bottom-right',
+    padding: '8px',
+    backgroundColor: 'white'
+  }
+});
+
+var rightStatsPanel = ui.Panel({
+  style: {
+    position: 'bottom-right',
+    padding: '8px',
+    backgroundColor: 'white'
+  }
+});
+//Create labels from statistics
+var sentinelStats = [
+  ui.Label('Overall Accuracy: ' + OA.getInfo().toFixed(2))
+  ];
+  
+var googleStats = [
+  ui.Label('Overall Accuracy: ' + OAG.getInfo().toFixed(2))
+  ];
+
+//Add labels to panel scaffolds
+sentinelStats.forEach(function(label) {leftStatsPanel.add(label); });
+googleStats.forEach(function(label) {rightStatsPanel.add(label); });
+
+//Add to Map
+leftMap.add(leftStatsPanel);
+rightMap.add(rightStatsPanel);
+
+
+
+
+
+
+
+
