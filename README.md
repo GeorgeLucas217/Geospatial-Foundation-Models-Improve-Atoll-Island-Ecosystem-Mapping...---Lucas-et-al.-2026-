@@ -1,7 +1,12 @@
 # Geospatial-Foundation-Models-Improve-Atoll-Island-Ecosystem-Mapping...---Lucas-et-al.-2026-
+
+---
+
 code for repeating the analysis presented in "Geospatial Foundation Models Improve Atoll Island Ecosystem Mapping A Case Study using AlphaEarth Embeddings" by Lucas, Cresswell, Duce, Young, Shan, and Murray
 
 Accurate ecosystem mapping is essential for protecting ecosystems around the world. Geospatial Foundation Models (GeoFMs) appear to provide an improved ability to detect ecosystems over traditional approaches. In this study, we investigate whether the use of embeddings from Google’s AlphaEarth Foundations model yields improvements to ecosystem maps developed in the Republic of Maldives compared to Sentinel-2 satellite imagery. 
+
+---
 
 ## Instructions
 The correct order for the code to be run is as follows:
