@@ -37,13 +37,13 @@ avg_accuracy <- classaccuracy %>%
   summarise(avg_acc = mean(accuracypercent, na.rm = TRUE))
 label_positions <- classaccuracy %>%
   group_by(efg) %>%
-  summarise(nopoints_label = max(nopoints, na.rm = TRUE), .groups = 'drop')
+  summarise(novalpoints_label = max(novalpoints, na.rm = TRUE), .groups = 'drop')
 ggplot(classaccuracy, aes(x=efg, y=accuracypercent, fill=model))+
   geom_col(position="dodge",width=0.7,colour='black')+
 #  geom_text(
 #    data = label_positions,
 #    aes(x = efg, y = max(classaccuracy$accuracypercent, na.rm = TRUE) * 1.05, # same height for all
-#        label = paste0("n = ", round(nopoints_label))),
+#        label = paste0("n = ", round(novalpoints_label))),
 #    size = 3.2,
 #    fontface = "bold",
 #    inherit.aes = FALSE
