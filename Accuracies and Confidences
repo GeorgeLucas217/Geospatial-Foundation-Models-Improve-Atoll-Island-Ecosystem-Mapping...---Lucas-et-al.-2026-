@@ -109,16 +109,16 @@ labs(
   )
 
 ########################## Probability vs Accuracy #############################
-prob_sentinel<-read.csv("AlphaEarth Paper/probabilities/Class_Probabilities_Sentinel3.csv",header=TRUE)
+prob_sentinel<-read.csv("AlphaEarth Paper/probabilities/Class_Probabilities_Sentinel.csv",header=TRUE)
 prob_sentinel<-prob_sentinel %>%
   mutate(source="Sentinel") #Add a source column
-prob_google<-read.csv("AlphaEarth Paper/probabilities/Class_Probabilities_Google2.csv",header=TRUE)
-prob_google<-prob_google %>%
-  mutate(source="Google")
+prob_alphaearth<-read.csv("AlphaEarth Paper/probabilities/Class_Probabilities_Alphaearth.csv",header=TRUE)
+prob_alphaearth<-prob_alphaearth %>%
+  mutate(source="alphaearth")
 head(prob_sentinel)
-head(prob_google)
+head(prob_alphaearth)
 # Combine the Data
-prob_combined<-bind_rows(prob_sentinel,prob_google)
+prob_combined<-bind_rows(prob_sentinel,prob_alphaearth)
 # Prepare Data
 prob_combined$class_number<-as.factor(prob_combined$class_number)
 prob_combined$source<-as.factor(prob_combined$source)
@@ -157,7 +157,7 @@ print(average_probabilities,n=28)
 # Combine dataframes
 classaccuracy <- classaccuracy %>%
   mutate(model=recode(model,
-                      "alphaearth" = "GOOGLE",
+                      "alphaearth" = "ALPHAEARTH",
                       "sentinel" = "SENTINEL"))
 accuracy_to_combine <- classaccuracy %>%
   complete(efg, model, fill = list(value=0))
@@ -190,10 +190,10 @@ paga<-ggplot(data=combined_data,aes(
     check_overlap = TRUE
   )+
   scale_color_manual(
-    values=c("GOOGLE"="#156082","SENTINEL"="#E97132"),
+    values=c("ALPHAEARTH"="#156082","SENTINEL"="#E97132"),
     name="Predictor Layers:",
     labels=label_wrap_gen(width=15)
-    (c("GOOGLE"="AlphaEarth Embeddings","SENTINEL"="Sentinel-2 Imagery"))
+    (c("ALPHAEARTH"="AlphaEarth Embeddings","SENTINEL"="Sentinel-2 Imagery"))
   )+
   geom_point(size=2,alpha=0.7)+
   # geom_smooth(method="loess",se=FALSE, span=1)+
@@ -228,10 +228,10 @@ size=3.5,
 check_overlap = TRUE
 )+
   scale_color_manual(
-    values=c("GOOGLE"="#156082","SENTINEL"="#E97132"),
+    values=c("ALPHAEARTH"="#156082","SENTINEL"="#E97132"),
     name="Covariates:",
     # labels=label_wrap_gen(width=15)
-    # (c("GOOGLE"="AlphaEarth Embeddings","SENTINEL"="Sentinel-2 Imagery")),
+    # (c("ALPHAEARTH"="AlphaEarth Embeddings","SENTINEL"="Sentinel-2 Imagery")),
     guide="none"
   )+
   geom_point(size=2,alpha=0.7)+
@@ -266,10 +266,10 @@ aagtp<-ggplot(data=combined_data,aes(
     check_overlap = TRUE
   )+
   scale_color_manual(
-    values=c("GOOGLE"="#156082","SENTINEL"="#E97132"),
+    values=c("ALPHAEARTH"="#156082","SENTINEL"="#E97132"),
     name="Covariates:",
     # labels=label_wrap_gen(width=15)
-    # (c("GOOGLE"="AlphaEarth Embeddings","SENTINEL"="Sentinel-2 Imagery")),
+    # (c("ALPHAEARTH"="AlphaEarth Embeddings","SENTINEL"="Sentinel-2 Imagery")),
     guide="none"
   )+
   geom_point(size=2,alpha=0.7)+
