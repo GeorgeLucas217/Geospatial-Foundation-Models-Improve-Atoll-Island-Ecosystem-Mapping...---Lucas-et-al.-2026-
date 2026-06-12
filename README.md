@@ -15,10 +15,10 @@ This code takes shapefiles from the Government of Maldives' official map of isla
 This code takes the study sites extracted in the previous step and generates training points ready for annotation. These points are split 60:40 between land and water, which is achieved by calculating the Normalised Difference Water Index using Sentinel-2 satellite imagery.
 
 ### 3 - Validation Points Parts 1 and 2 - Google Earth Engine: 
-This code generates training points that are ready for annotation. The land/water split is applied again here, but further calculations are done to try to represent all ecosystem types. The code is split into two parts due to its large computing requirements.
+This code generates training points that are ready for annotation. The land/water split is applied again here, but further calculations are done to try to represent all ecosystem types. Here, a preliminary set of annotated training points are used to run an ecosystem classification map using AlphaEarth Foundations. This preliminary dataset can be found as the Google Earth Engine asset 'preliminaryAnnotatedTrainingPoints' The code is split into two parts due to its large computing requirements.
 
 ### 4 - Annotating Training and Validation Points:
-This step can be conducted in QGIS, ArcGIS, OlmoEarth or any other software that allows you to annotate spatial point data. The annotated points used in this study are available as a Google Earth Engine asset.
+This step can be conducted in QGIS, ArcGIS, OlmoEarth or any other software that allows you to annotate spatial point data. The annotated points used in this study are available as the Google Earth Engine assets 'annotatedTrainingPoints' and 'annotatedValidationPoints'.
 
 ### 5 - Running Models and Displaying Classification Maps - Google Earth Engine:
 This code takes the annotated training points and runs Random Forest classification models over AlphaEarth Foundations and Sentinel-2 imagery, then displays these side by side. A confusion matrix (necessary for per-class accuracy analysis) and probability values (necessary for the confidence analysis) are also generated in this code.
