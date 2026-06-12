@@ -6,7 +6,7 @@ Accurate ecosystem mapping is essential for protecting ecosystems around the wor
 ---
 
 ## Instructions
-The correct order for the code to be run is as follows:
+Due to the nature of this study several separate codes across different programs were needed. All R code is present in this GitHub repository. To access the Google Earth Engine codes, please head to the Google Earth Engine repository which can be found in the file 'Link to Google Earth Engine Repository'. Only one step needs to be completed manually, which is the tidying of the confusion matrix. The correct order for the code to be run is as follows:
 
 ### 1 - Study Site Extraction - RStudio: 
 This code takes shapefiles from the Government of Maldives' official map of islands and reefs and randomly selects 20 (one within each administrative atoll) using a seed (for repeatability). Running this code will return a shapefile of the 20 study sites used in this analysis.
